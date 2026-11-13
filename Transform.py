@@ -103,3 +103,30 @@ test_df.to_csv(output_dir / "test_transformed.csv", index=False)
 print("\nData transformation completed successfully!")
 print("Training data shape:", train_df.shape)
 print("Testing data shape:", test_df.shape)
+
+# 9. Generate data summary
+
+summary = {
+    "Training Rows": len(train_df),
+    "Testing Rows": len(test_df),
+    "Total Rows": len(train_df) + len(test_df),
+    "Number of Features": len(feature_names),
+    "Training Missing Values": train_df.isnull().sum().sum(),
+    "Testing Missing Values": test_df.isnull().sum().sum(),
+    "Average Exam Score": df["Exam_Score"].mean(),
+    "Minimum Exam Score": df["Exam_Score"].min(),
+    "Maximum Exam Score": df["Exam_Score"].max()
+}
+
+summary_df = pd.DataFrame(
+    list(summary.items()),
+    columns=["Metric", "Value"]
+)
+
+summary_df.to_csv(
+    output_dir / "summary.csv",
+    index=False
+)
+
+print("\nData Summary:")
+print(summary_df)
