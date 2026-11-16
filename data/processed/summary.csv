@@ -1,0 +1,10 @@
+Metric,Value
+Training Rows,5284.0
+Testing Rows,1322.0
+Total Rows,6606.0
+Number of Features,40.0
+Training Missing Values,0.0
+Testing Missing Values,0.0
+Average Exam Score,67.23054798667877
+Minimum Exam Score,55.0
+Maximum Exam Score,100.0
