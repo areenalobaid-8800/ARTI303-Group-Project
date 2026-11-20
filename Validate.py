@@ -305,11 +305,9 @@ def check_categorical_values(df):
 def validate_data(df):
     print("\n========== STARTING DATA VALIDATION ==========")
 
-    structure_valid = check_structure(df)
-
-    if not structure_valid:
-        print("\nValidation stopped due to structural problems.")
-        return
+    if not check_structure(df):
+        print("\nValidation Failed: Invalid dataset structure.")
+        return False
 
     check_data_types(df)
     check_missing_values(df)
@@ -317,6 +315,7 @@ def validate_data(df):
     check_numerical_values(df)
     check_categorical_values(df)
 
+    return True
     print("\n========== DATA VALIDATION COMPLETED ==========")
 
 

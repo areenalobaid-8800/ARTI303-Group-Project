@@ -1,4 +1,5 @@
 import pandas as pd
+from Validate import validate_data
 from pathlib import Path
 
 from sklearn.model_selection import train_test_split
@@ -42,9 +43,12 @@ TARGET_COLUMN = "Exam_Score"
 OUTPUT_DIR = Path("data/processed")
 
 
-# 3. Prepare data
 def prepare_data():
     df = load_data()
+
+    if not validate_data(df):
+        raise ValueError("Data validation failed.")
+
     df = clean_data(df)
 
     return df
