@@ -1,6 +1,18 @@
 
+import logging
 import pandas as pd
 from Load import load_data
+
+
+# Configure logging
+logging.basicConfig(
+    filename="project.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    encoding="utf-8"
+)
+
+logger = logging.getLogger(__name__)
 
 
 # Required columns in the dataset
@@ -15,7 +27,6 @@ REQUIRED_COLUMNS = [
     "Gender", "Exam_Score"
 ]
 
-#
 TARGET_COLUMN = "Exam_Score"
 
 
@@ -69,62 +80,81 @@ NUMERICAL_RANGES = {
 }
 
 
-# 1. Structure and Schema Validation
 def check_structure(df):
+    """
+    Check the dataset structure, required columns, and duplicate column names.
+
+    Args:
+        df (pd.DataFrame): Dataset to validate.
+
+    Returns:
+        bool: True if the dataset structure is valid, otherwise False.
+    """
     print("\n========== 1. STRUCTURE & SCHEMA VALIDATION ==========")
 
     print(f"Dataset Dimensions: {df.shape[0]} Rows, {df.shape[1]} Columns")
 
-# check if the dataset is empty or not 
     if df.empty:
+        logger.warning("Dataset is empty.")
         print("Warning: Dataset is empty!")
         return False
 
-    # Check required columns
     missing_cols = [
         col for col in REQUIRED_COLUMNS if col not in df.columns
     ]
 
     if missing_cols:
+        logger.error("Missing required columns: %s", missing_cols)
         print("Warning: Missing required columns:", missing_cols)
     else:
+        logger.info("All required columns are available.")
         print("All required columns are available.")
 
-    # Check target column
     if TARGET_COLUMN in df.columns:
         print(f"Target column '{TARGET_COLUMN}' is present.")
     else:
+        logger.error("Target column '%s' is missing.", TARGET_COLUMN)
         print(f"Warning: Target column '{TARGET_COLUMN}' is missing!")
 
-    # Check duplicate column names
     duplicated_cols = df.columns[df.columns.duplicated()].tolist()
 
     if duplicated_cols:
+        logger.error("Duplicate column names found: %s", duplicated_cols)
         print("Warning: Duplicate column names found:", duplicated_cols)
 
-    # Stop if required columns are missing or duplicated
     if missing_cols or duplicated_cols:
         return False
 
+    logger.info("Dataset structure validation passed.")
     return True
 
 
-# 2. Data Types Validation
 def check_data_types(df):
+    """
+    Check whether numerical and categorical columns have the expected data types.
+
+    Args:
+        df (pd.DataFrame): Dataset to validate.
+
+    Returns:
+        bool: True if all checked data types are valid.
+    """
     print("\n========== 2. DATA TYPES VALIDATION ==========")
 
-    # Check numerical columns
+    is_valid = True
+
     for col in NUMERICAL_COLUMNS:
         if col in df.columns:
             if not pd.api.types.is_numeric_dtype(df[col]):
+                logger.warning("Column %s should be numerical.", col)
                 print(
                     f"Warning: {col} should be numerical "
                     f"(Current: {df[col].dtype})."
                 )
+                is_valid = False
             else:
                 print(f"{col}: Numerical data type is valid.")
 
-    # Check categorical columns
     for col in CATEGORICAL_COLUMNS:
         if col in df.columns:
             dtype = df[col].dtype
@@ -134,16 +164,33 @@ def check_data_types(df):
                 or pd.api.types.is_string_dtype(dtype)
                 or isinstance(dtype, pd.CategoricalDtype)
             ):
+                logger.warning("Column %s should be categorical.", col)
                 print(
                     f"Warning: {col} should be categorical/string "
                     f"(Current: {dtype})."
                 )
+                is_valid = False
             else:
                 print(f"{col}: Categorical data type is valid.")
 
+    if is_valid:
+        logger.info("Data types validation passed.")
+    else:
+        logger.warning("Data types validation failed.")
 
-# 3. Missing Values Validation
+    return is_valid
+
+
 def check_missing_values(df):
+    """
+    Check for actual missing values and hidden missing-value placeholders.
+
+    Args:
+        df (pd.DataFrame): Dataset to validate.
+
+    Returns:
+        bool: True if no missing values or placeholders are found.
+    """
     print("\n========== 3. MISSING VALUES VALIDATION ==========")
 
     missing_counts = df.isnull().sum()
@@ -152,23 +199,26 @@ def check_missing_values(df):
     print(f"Total Missing Values: {total_missing}")
 
     if total_missing > 0:
+        logger.warning("Found %s missing values.", total_missing)
         print("\nMissing Values per Column:")
         print(missing_counts[missing_counts > 0])
     else:
+        logger.info("No actual missing values found.")
         print("No missing values found.")
 
-    # Check hidden missing value placeholders
     hidden_placeholders = ["", "N/A", "NA", "NULL", "NONE", "UNKNOWN"]
     found_hidden = False
 
     for col in df.select_dtypes(include=["object", "string"]).columns:
-
         values = df[col].dropna().astype(str).str.strip().str.upper()
-
         hidden_count = values.isin(hidden_placeholders).sum()
 
         if hidden_count > 0:
             found_hidden = True
+            logger.warning(
+                "Column %s contains %s hidden missing values.",
+                col, hidden_count
+            )
             print(
                 f"Column '{col}': "
                 f"{hidden_count} hidden missing values found."
@@ -177,25 +227,55 @@ def check_missing_values(df):
     if not found_hidden:
         print("No hidden missing value placeholders found.")
 
+    is_valid = total_missing == 0 and not found_hidden
 
-# 4. Duplicate Validation
+    if is_valid:
+        logger.info("Missing values validation passed.")
+
+    return is_valid
+
+
 def check_duplicates(df):
+    """
+    Check whether the dataset contains duplicate rows.
+
+    Args:
+        df (pd.DataFrame): Dataset to validate.
+
+    Returns:
+        bool: True if no duplicate rows are found.
+    """
     print("\n========== 4. DUPLICATE VALIDATION ==========")
 
     duplicate_rows = df.duplicated().sum()
 
     print(f"Duplicate Rows Count: {duplicate_rows}")
 
+    if duplicate_rows > 0:
+        logger.warning("Found %s duplicate rows.", duplicate_rows)
+        return False
 
-# 5. Numerical Values and Outliers Validation
+    logger.info("No duplicate rows found.")
+    return True
+
+
 def check_numerical_values(df):
+    """
+    Check numerical ranges, integer constraints, and statistical outliers.
+
+    Args:
+        df (pd.DataFrame): Dataset to validate.
+
+    Returns:
+        bool: True if no numerical range or integer violations are found.
+    """
     print("\n========== 5. NUMERICAL VALUES & OUTLIERS VALIDATION ==========")
 
-    # Range Validation
+    is_valid = True
+
     print("\nRange Validation:")
 
     for col, (minimum, maximum) in NUMERICAL_RANGES.items():
-
         if col not in df.columns:
             continue
 
@@ -210,37 +290,39 @@ def check_numerical_values(df):
             ]
 
         if len(invalid) > 0:
+            logger.warning(
+                "Column %s has %s out-of-range values.",
+                col, len(invalid)
+            )
             print(
                 f"Warning: {col} has "
                 f"{len(invalid)} out-of-range values."
             )
+            is_valid = False
         else:
             print(f"{col}: No out-of-range values found.")
 
-    # Check whole numbers in Tutoring_Sessions
     if "Tutoring_Sessions" in df.columns:
-
         if pd.api.types.is_numeric_dtype(df["Tutoring_Sessions"]):
-
             values = df["Tutoring_Sessions"].dropna()
-
             invalid_count = (values % 1 != 0).sum()
 
             if invalid_count > 0:
+                logger.warning(
+                    "Tutoring_Sessions has %s non-integer values.",
+                    invalid_count
+                )
                 print(
                     f"Warning: Tutoring_Sessions has "
                     f"{invalid_count} non-integer values."
                 )
+                is_valid = False
             else:
-                print(
-                    "Tutoring_Sessions: All values are whole numbers."
-                )
+                print("Tutoring_Sessions: All values are whole numbers.")
 
-    # Statistical Outlier Detection using IQR
     print("\nOutlier Summary (IQR Method):")
 
     for col in NUMERICAL_COLUMNS:
-
         if col not in df.columns:
             continue
 
@@ -264,19 +346,39 @@ def check_numerical_values(df):
         ]
 
         if len(outliers) > 0:
+            logger.info(
+                "Column %s has %s statistical outliers.",
+                col, len(outliers)
+            )
             print(
                 f"{col}: {len(outliers)} statistical outliers detected."
             )
         else:
             print(f"{col}: No statistical outliers detected.")
 
+    if is_valid:
+        logger.info("Numerical range validation passed.")
+    else:
+        logger.warning("Numerical range validation failed.")
 
-# 6. Categorical Values Validation
+    return is_valid
+
+
 def check_categorical_values(df):
+    """
+    Check categorical columns against their allowed values.
+
+    Args:
+        df (pd.DataFrame): Dataset to validate.
+
+    Returns:
+        bool: True if all categorical values are allowed.
+    """
     print("\n========== 6. CATEGORICAL VALUES VALIDATION ==========")
 
-    for col, allowed_values in ALLOWED_CATEGORIES.items():
+    is_valid = True
 
+    for col, allowed_values in ALLOWED_CATEGORIES.items():
         if col not in df.columns:
             continue
 
@@ -293,32 +395,87 @@ def check_categorical_values(df):
         invalid_values = actual_values[invalid_mask].unique()
 
         if len(invalid_values) > 0:
+            logger.warning(
+                "Column %s has unexpected categories: %s",
+                col, invalid_values
+            )
             print(
                 f"Warning: Column '{col}' has unexpected categories: "
                 f"{invalid_values}"
             )
+            is_valid = False
         else:
             print(f"{col}: All categorical values are valid.")
 
+    if is_valid:
+        logger.info("Categorical values validation passed.")
 
-# Main Validation Function
+    return is_valid
+
+
 def validate_data(df):
+    """
+    Run all dataset validation checks.
+
+    Args:
+        df (pd.DataFrame): Dataset to validate.
+
+    Returns:
+        bool: True if all validation checks pass, otherwise False.
+    """
+    logger.info("Starting data validation.")
     print("\n========== STARTING DATA VALIDATION ==========")
 
+<<<<<<< HEAD
     if not check_structure(df):
+=======
+    if not isinstance(df, pd.DataFrame):
+        logger.error("Invalid input: Expected a pandas DataFrame.")
+        print("Validation Failed: Input must be a pandas DataFrame.")
+        return False
+
+    if not check_structure(df):
+        logger.error("Validation failed due to invalid dataset structure.")
+>>>>>>> update-validate-transform
         print("\nValidation Failed: Invalid dataset structure.")
         return False
 
-    check_data_types(df)
-    check_missing_values(df)
-    check_duplicates(df)
-    check_numerical_values(df)
-    check_categorical_values(df)
+    data_types_valid = check_data_types(df)
+    missing_values_valid = check_missing_values(df)
+    duplicates_valid = check_duplicates(df)
+    numerical_values_valid = check_numerical_values(df)
+    categorical_values_valid = check_categorical_values(df)
 
+<<<<<<< HEAD
     return True
     print("\n========== DATA VALIDATION COMPLETED ==========")
+=======
+    is_valid = all([
+        data_types_valid,
+        missing_values_valid,
+        duplicates_valid,
+        numerical_values_valid,
+        categorical_values_valid
+    ])
+
+    if is_valid:
+        logger.info("Data validation completed successfully.")
+        print("\n========== DATA VALIDATION COMPLETED ==========")
+        print("Validation Passed: No critical data errors found.")
+    else:
+        logger.warning("Data validation failed. Check the warnings above.")
+        print("\n========== DATA VALIDATION FAILED ==========")
+        print("Validation Failed: Please check the warnings above.")
+
+    return is_valid
+>>>>>>> update-validate-transform
 
 
 if __name__ == "__main__":
-    df = load_data()
-    validate_data(df)
+    try:
+        df = load_data()
+        validate_data(df)
+
+    except Exception:
+        logger.exception("An error occurred while running validation.")
+        raise
