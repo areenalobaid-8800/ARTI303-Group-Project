@@ -1,8 +1,3 @@
-<<<<<<< HEAD
-import pandas as pd
-from Validate import validate_data
-from pathlib import Path
-=======
 
 """
 Transform Module
@@ -14,9 +9,6 @@ performance dataset for machine learning.
 import logging
 import pandas as pd
 
-from Validate import validate_data
->>>>>>> update-validate-transform
-
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import OneHotEncoder, StandardScaler
 from sklearn.compose import ColumnTransformer
@@ -24,8 +16,15 @@ from sklearn.compose import ColumnTransformer
 from Load import load_data
 from Clean import clean_data
 
-<<<<<<< HEAD
-=======
+from Validate import (
+    validate_data,
+    check_structure,
+    check_data_types,
+    check_duplicates,
+    check_categorical_values,
+    NUMERICAL_RANGES,
+)
+
 from config import (
     TARGET_COLUMN,
     PROCESSED_DATA_DIR,
@@ -34,9 +33,16 @@ from config import (
 )
 
 
+# Configure logging
+logging.basicConfig(
+    filename="project.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s",
+    encoding="utf-8"
+)
+
 logger = logging.getLogger(__name__)
 
->>>>>>> update-validate-transform
 
 # 1. Define numerical columns
 numerical_columns = [
@@ -67,38 +73,70 @@ categorical_columns = [
 ]
 
 
-<<<<<<< HEAD
-TARGET_COLUMN = "Exam_Score"
-OUTPUT_DIR = Path("data/processed")
+def check_raw_numerical_values(df):
+    """
+    Check raw numerical values except Exam_Score.
+
+    Invalid Exam_Score values are allowed at this stage
+    because Clean.py removes them.
+    """
+
+    is_valid = True
+
+    print("\nChecking raw numerical ranges...")
+
+    for col, (minimum, maximum) in NUMERICAL_RANGES.items():
+
+        if col == TARGET_COLUMN:
+            continue
+
+        values = df[col].dropna()
+
+        if maximum is None:
+            invalid = values[values < minimum]
+        else:
+            invalid = values[
+                (values < minimum) | (values > maximum)
+            ]
+
+        if not invalid.empty:
+            logger.error(
+                "Column %s contains %s out-of-range values.",
+                col,
+                len(invalid)
+            )
+            print(
+                f"Validation Error: {col} contains "
+                f"{len(invalid)} out-of-range values."
+            )
+            is_valid = False
+
+    # Tutoring sessions must contain whole numbers
+    values = df["Tutoring_Sessions"].dropna()
+
+    if (values % 1 != 0).any():
+        logger.error(
+            "Tutoring_Sessions contains non-integer values."
+        )
+        print(
+            "Validation Error: Tutoring_Sessions "
+            "must contain whole numbers."
+        )
+        is_valid = False
+
+    return is_valid
 
 
-def prepare_data():
-    df = load_data()
-
-    if not validate_data(df):
-        raise ValueError("Data validation failed.")
-
-    df = clean_data(df)
-
-    return df
-
-
-# 4. Split data
-def split_data(df):
-=======
 def prepare_data():
     """
     Load, validate, and clean the raw student dataset.
 
-    Raw data validation warnings are logged because missing
-    values and invalid scores are handled during cleaning.
-    The cleaned dataset must pass validation.
+    Expected missing values and invalid exam scores are
+    handled during cleaning. Other raw data errors stop
+    the pipeline.
 
     Returns:
         pd.DataFrame: Cleaned and validated dataset.
-
-    Raises:
-        ValueError: If the cleaned dataset fails validation.
     """
 
     logger.info("Starting data preparation.")
@@ -106,22 +144,36 @@ def prepare_data():
     # 1. Load the raw dataset
     df = load_data()
 
-    # 2. Validate the raw dataset
-    print("\nValidating raw dataset...")
-    logger.info("Validating raw dataset.")
+    # 2. Validate raw dataset structure
+    print("\n========== RAW DATA VALIDATION ==========")
 
-    if not validate_data(df):
-        logger.warning(
-            "Raw dataset contains validation issues. "
-            "Proceeding to cleaning."
-        )
+    if not check_structure(df):
+        raise ValueError("Raw dataset structure validation failed.")
 
-    # 3. Clean the dataset
+    # 3. Validate raw data types
+    if not check_data_types(df):
+        raise ValueError("Raw dataset data types validation failed.")
+
+    # 4. Check duplicate rows
+    if not check_duplicates(df):
+        raise ValueError("Raw dataset contains duplicate rows.")
+
+    # 5. Check categorical values
+    if not check_categorical_values(df):
+        raise ValueError("Raw dataset contains invalid categorical values.")
+
+    # 6. Check numerical values except Exam_Score
+    if not check_raw_numerical_values(df):
+        raise ValueError("Raw dataset contains invalid numerical values.")
+
+    print("\nRaw dataset validation completed.")
+
+    # 7. Clean the dataset
+    print("\n========== DATA CLEANING ==========")
     df = clean_data(df)
 
-    # 4. Validate the cleaned dataset
-    print("\nValidating cleaned dataset...")
-    logger.info("Validating cleaned dataset.")
+    # 8. Perform complete validation after cleaning
+    print("\n========== CLEANED DATA VALIDATION ==========")
 
     if not validate_data(df):
         logger.error("Data validation failed after cleaning.")
@@ -135,21 +187,18 @@ def prepare_data():
     return df
 
 
+# 4. Split data
 def split_data(df):
     """
     Split the dataset into training and testing sets.
 
-    The target column is separated from the input features.
-
-    Args:
-        df (pd.DataFrame): Cleaned dataset.
+    The target column is separated from input features.
 
     Returns:
         tuple: X_train, X_test, y_train, y_test.
     """
 
     logger.info("Starting train-test split.")
->>>>>>> update-validate-transform
 
     X = df[numerical_columns + categorical_columns]
     y = df[TARGET_COLUMN]
@@ -157,17 +206,6 @@ def split_data(df):
     X_train, X_test, y_train, y_test = train_test_split(
         X,
         y,
-<<<<<<< HEAD
-        test_size=0.2,
-        random_state=42
-    )
-
-    return X_train, X_test, y_train, y_test
-
-
-# 5. Transform data
-def transform_data(X_train, X_test):
-=======
         test_size=TEST_SIZE,
         random_state=RANDOM_STATE
     )
@@ -182,6 +220,7 @@ def transform_data(X_train, X_test):
     return X_train, X_test, y_train, y_test
 
 
+# 5. Transform data
 def transform_data(X_train, X_test):
     """
     Scale numerical features and encode categorical features.
@@ -189,31 +228,16 @@ def transform_data(X_train, X_test):
     The preprocessor is fitted only on training data to prevent
     data leakage. The same transformations are applied to test data.
 
-    Args:
-        X_train (pd.DataFrame): Training features.
-        X_test (pd.DataFrame): Testing features.
-
     Returns:
         tuple: Transformed training data, transformed testing data,
                and feature names.
     """
 
     logger.info("Starting feature transformation.")
->>>>>>> update-validate-transform
 
     preprocessor = ColumnTransformer(
         transformers=[
             ("num", StandardScaler(), numerical_columns),
-<<<<<<< HEAD
-            ("cat", OneHotEncoder(
-                handle_unknown="ignore",
-                sparse_output=False
-            ), categorical_columns)
-        ]
-    )
-
-    X_train_transformed = preprocessor.fit_transform(X_train)
-=======
             (
                 "cat",
                 OneHotEncoder(
@@ -225,28 +249,21 @@ def transform_data(X_train, X_test):
         ]
     )
 
-    # Fit only on training data to prevent data leakage
+    # Fit only on training data
     X_train_transformed = preprocessor.fit_transform(X_train)
 
     # Apply the fitted transformations to test data
->>>>>>> update-validate-transform
     X_test_transformed = preprocessor.transform(X_test)
 
     feature_names = preprocessor.get_feature_names_out()
 
-<<<<<<< HEAD
-    return X_train_transformed, X_test_transformed, feature_names
-
-
-# 6. Create final DataFrames
-=======
     logger.info("Feature transformation completed successfully.")
     logger.info("Number of transformed features: %s", len(feature_names))
 
     return X_train_transformed, X_test_transformed, feature_names
 
 
->>>>>>> update-validate-transform
+# 6. Create final DataFrames
 def create_dataframes(
     X_train_transformed,
     X_test_transformed,
@@ -256,19 +273,13 @@ def create_dataframes(
     y_train,
     y_test
 ):
-<<<<<<< HEAD
-=======
     """
     Create DataFrames from transformed features and add target values.
 
-    Original row indices are preserved when creating the DataFrames.
-
-    Returns:
-        tuple: Transformed training and testing DataFrames.
+    Original row indices are preserved.
     """
 
     logger.info("Creating final transformed DataFrames.")
->>>>>>> update-validate-transform
 
     train_df = pd.DataFrame(
         X_train_transformed,
@@ -285,36 +296,16 @@ def create_dataframes(
     train_df[TARGET_COLUMN] = y_train
     test_df[TARGET_COLUMN] = y_test
 
-<<<<<<< HEAD
-    return train_df, test_df
-
-
-# 7. Export transformed data
-def export_data(train_df, test_df):
-
-    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
-
-    train_df.to_csv(
-        OUTPUT_DIR / "train_transformed.csv",
-        index=False
-    )
-
-    test_df.to_csv(
-        OUTPUT_DIR / "test_transformed.csv",
-        index=False
-    )
-=======
     logger.info("Training DataFrame shape: %s", train_df.shape)
     logger.info("Testing DataFrame shape: %s", test_df.shape)
 
     return train_df, test_df
 
 
+# 7. Export transformed data
 def export_data(train_df, test_df):
     """
     Export transformed training and testing datasets as CSV files.
-
-    Files are saved in the configured processed data directory.
     """
 
     logger.info("Starting transformed data export.")
@@ -326,22 +317,16 @@ def export_data(train_df, test_df):
 
     train_df.to_csv(train_path, index=False)
     test_df.to_csv(test_path, index=False)
->>>>>>> update-validate-transform
 
-    print("\nData transformation completed successfully!")
+    print("\nTransformed data exported successfully!")
     print("Training data shape:", train_df.shape)
     print("Testing data shape:", test_df.shape)
 
-<<<<<<< HEAD
-
-# 8. Generate data summary
-def generate_summary(df, train_df, test_df, feature_names):
-=======
     logger.info("Training data exported to: %s", train_path)
     logger.info("Testing data exported to: %s", test_path)
-    logger.info("Transformed data export completed successfully.")
 
 
+# 8. Generate data summary
 def generate_summary(df, train_df, test_df, feature_names):
     """
     Generate and export a summary of the processed dataset.
@@ -354,7 +339,8 @@ def generate_summary(df, train_df, test_df, feature_names):
     """
 
     logger.info("Generating processed data summary.")
->>>>>>> update-validate-transform
+
+    PROCESSED_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
     summary = {
         "Training Rows": len(train_df),
@@ -373,76 +359,23 @@ def generate_summary(df, train_df, test_df, feature_names):
         columns=["Metric", "Value"]
     )
 
-<<<<<<< HEAD
-    summary_df.to_csv(
-        OUTPUT_DIR / "summary.csv",
-        index=False
-    )
-=======
     summary_path = PROCESSED_DATA_DIR / "summary.csv"
 
     summary_df.to_csv(summary_path, index=False)
->>>>>>> update-validate-transform
 
     print("\nData Summary:")
     print(summary_df)
 
-<<<<<<< HEAD
-    return summary_df
-
-
-# 9. Main function
-def main():
-
-    df = prepare_data()
-
-    X_train, X_test, y_train, y_test = split_data(df)
-
-    X_train_transformed, X_test_transformed, feature_names = transform_data(
-        X_train,
-        X_test
-    )
-
-    train_df, test_df = create_dataframes(
-        X_train_transformed,
-        X_test_transformed,
-        feature_names,
-        X_train,
-        X_test,
-        y_train,
-        y_test
-    )
-
-    export_data(train_df, test_df)
-
-    generate_summary(
-        df,
-        train_df,
-        test_df,
-        feature_names
-    )
-
-
-if __name__ == "__main__":
-    main()
-=======
     logger.info("Summary exported to: %s", summary_path)
     logger.info("Processed data summary generated successfully.")
 
     return summary_df
 
 
+# 9. Main function
 def main():
     """
     Execute the complete data preparation and transformation pipeline.
-
-    Steps:
-    1. Prepare and validate the dataset.
-    2. Split data into training and testing sets.
-    3. Transform numerical and categorical features.
-    4. Create final DataFrames.
-    5. Export transformed datasets.
-    6. Generate the data summary.
     """
 
     logger.info("Starting the complete transformation pipeline.")
@@ -480,10 +413,11 @@ def main():
         logger.info("Transformation pipeline completed successfully.")
 
     except Exception:
-        logger.exception("An error occurred in the transformation pipeline.")
+        logger.exception(
+            "An error occurred in the transformation pipeline."
+        )
         raise
 
 
 if __name__ == "__main__":
     main()
->>>>>>> update-validate-transform
