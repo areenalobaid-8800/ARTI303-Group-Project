@@ -1,0 +1,19 @@
+Model,Accuracy,Balanced Accuracy,Macro Precision,Macro Recall,Macro F1-Score,Strategy,Parameters,Model Type
+Random Forest,0.983451536643026,0.5173136992414101,0.5372911694510739,0.5173136992414101,0.5266140029153149,class_weight,"{'n_estimators': 200, 'max_depth': 10, 'min_samples_leaf': 3, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Decision Tree,0.9728132387706856,0.4770638107987506,0.5189960460718583,0.4770638107987506,0.49538430664258476,none,"{'max_depth': 10, 'min_samples_leaf': 2}",Decision_Tree
+Decision Tree,0.9728132387706856,0.5136992414100848,0.4677992226243131,0.5136992414100848,0.48744223427767724,class_weight,"{'max_depth': None, 'min_samples_leaf': 1}",Decision_Tree
+Decision Tree,0.983451536643026,0.4440428380187416,0.5781868566904196,0.4440428380187416,0.4843884185989449,none,"{'max_depth': 5, 'min_samples_leaf': 5}",Decision_Tree
+Decision Tree,0.9716312056737588,0.47666220437304774,0.4400214448465353,0.47666220437304774,0.45569620253164556,none,"{'max_depth': None, 'min_samples_leaf': 1}",Decision_Tree
+Random Forest,0.9810874704491725,0.4066041945560018,0.49445764053840063,0.4066041945560018,0.432707643233959,class_weight,"{'n_estimators': 200, 'max_depth': 15, 'min_samples_leaf': 2, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Decision Tree,0.9196217494089834,0.49562695225345826,0.40441403834260975,0.49562695225345826,0.42681643149325127,class_weight,"{'max_depth': 10, 'min_samples_leaf': 2}",Decision_Tree
+Random Forest,0.9822695035460993,0.3703703703703704,0.6607495069033531,0.3703703703703704,0.3970149253731343,class_weight,"{'n_estimators': 200, 'max_depth': None, 'min_samples_leaf': 1, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Random Forest,0.9810874704491725,0.36996876394466754,0.4940758293838862,0.36996876394466754,0.39075341225878857,random_over_sampling,"{'n_estimators': 200, 'max_depth': 10, 'min_samples_leaf': 3, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Decision Tree,0.9243498817966903,0.38732708612226685,0.36953551912568305,0.38732708612226685,0.37372766481823777,random_over_sampling,"{'max_depth': 10, 'min_samples_leaf': 2}",Decision_Tree
+Decision Tree,0.6631205673758865,0.5289666602919615,0.3935684178154058,0.5289666602919615,0.36928125977478893,random_over_sampling,"{'max_depth': 5, 'min_samples_leaf': 5}",Decision_Tree
+Decision Tree,0.6560283687943262,0.5265570217377447,0.3918373850428111,0.5265570217377445,0.3653325344734129,class_weight,"{'max_depth': 5, 'min_samples_leaf': 5}",Decision_Tree
+Random Forest,0.9810874704491725,0.3333333333333333,0.32702915681639083,0.3333333333333333,0.33015115354017505,none,"{'n_estimators': 200, 'max_depth': None, 'min_samples_leaf': 1, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Random Forest,0.9810874704491725,0.3333333333333333,0.32702915681639083,0.3333333333333333,0.33015115354017505,random_over_sampling,"{'n_estimators': 200, 'max_depth': None, 'min_samples_leaf': 1, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Random Forest,0.9810874704491725,0.3333333333333333,0.32702915681639083,0.3333333333333333,0.33015115354017505,none,"{'n_estimators': 200, 'max_depth': 15, 'min_samples_leaf': 2, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Random Forest,0.9810874704491725,0.3333333333333333,0.32702915681639083,0.3333333333333333,0.33015115354017505,random_over_sampling,"{'n_estimators': 200, 'max_depth': 15, 'min_samples_leaf': 2, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Random Forest,0.9810874704491725,0.3333333333333333,0.32702915681639083,0.3333333333333333,0.33015115354017505,none,"{'n_estimators': 200, 'max_depth': 10, 'min_samples_leaf': 3, 'max_features': 'sqrt'}",Random_Forest_Classifier
+Decision Tree,0.9633569739952719,0.3273092369477912,0.326915363016446,0.3273092369477912,0.3271121814168172,random_over_sampling,"{'max_depth': None, 'min_samples_leaf': 1}",Decision_Tree
