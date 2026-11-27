@@ -1,209 +1,255 @@
 
-"""
-Clean Module
-
-Handles missing values and invalid exam scores
-in the student performance dataset.
-"""
+"""Step 3 - Clean: fill missing values and remove invalid rows."""
 
 import logging
+
 import pandas as pd
-from Load import load_data
 
-
-# Configure logging
-logging.basicConfig(
-    filename="project.log",
-    level=logging.INFO,
-    format="%(asctime)s - %(levelname)s - %(message)s",
-    encoding="utf-8"
-)
+import config
 
 logger = logging.getLogger(__name__)
 
 
-# Required columns for cleaning
-REQUIRED_COLUMNS = [
-    "Teacher_Quality",
-    "Parental_Education_Level",
-    "Distance_from_Home",
-    "Exam_Score"
-]
-
-
-# Categorical columns that require missing-value handling
-CATEGORICAL_COLUMNS = [
-    "Teacher_Quality",
-    "Parental_Education_Level",
-    "Distance_from_Home"
-]
-
-
 def clean_data(df):
-    """
-    Clean the student performance dataset.
+    """Return a cleaned COPY of the DataFrame.
 
-    The function:
-    1. Checks the input DataFrame and required columns.
-    2. Creates a copy to preserve the original dataset.
-    3. Fills missing categorical values using the mode.
-    4. Removes rows with invalid exam scores (outside 0-100).
-    5. Reports the cleaning results.
+    Steps:
+      1. Check the input DataFrame and required columns.
+      2. Check numeric column data types.
+      3. Remove rows with missing target values.
+      4. Remove rows with invalid target scores.
+      5. Remove rows with invalid numeric feature values.
+      6. Remove rows with unexpected categorical values.
+      7. Fill missing numeric values with the median.
+      8. Fill missing categorical values with the mode.
+      9. Remove exact duplicate rows.
+      10. Reset the index.
 
-    Args:
-        df (pd.DataFrame): Raw dataset to clean.
+    Missing feature values are preserved during invalid-value filtering
+    so they can be filled in the next steps.
 
-    Returns:
-        pd.DataFrame: Cleaned dataset.
+    The original DataFrame is never modified.
 
     Raises:
-        TypeError: If the input is not a pandas DataFrame
-                   or Exam_Score is not numerical.
-        ValueError: If the dataset is empty, required columns
-                    are missing, or a mode cannot be calculated.
+        TypeError: if the input is not a DataFrame or numeric columns
+                   have incorrect data types.
+        ValueError: if the DataFrame is empty or no usable values remain.
+        KeyError: if required project columns are missing.
     """
 
-    logger.info("Starting data cleaning.")
-
-    # 1. Validate input
+    # 1. Check input
     if not isinstance(df, pd.DataFrame):
-        logger.error("Invalid input: Expected a pandas DataFrame.")
-        raise TypeError("Input must be a pandas DataFrame.")
+        raise TypeError("clean_data expects a pandas DataFrame")
 
     if df.empty:
-        logger.error("Cannot clean an empty dataset.")
-        raise ValueError("The dataset is empty.")
+        raise ValueError("Cannot clean an empty DataFrame")
 
     # 2. Check required columns
-    missing_columns = [
-        col for col in REQUIRED_COLUMNS if col not in df.columns
-    ]
-
-    if missing_columns:
-        error_message = f"Missing required columns: {missing_columns}"
-        logger.error(error_message)
-        raise ValueError(error_message)
-
-    # Check target column data type
-    if not pd.api.types.is_numeric_dtype(df["Exam_Score"]):
-        logger.error("Exam_Score must contain numerical values.")
-        raise TypeError("Exam_Score must be numerical.")
-
-    # 3. Create a copy to preserve the original dataset
-    df_clean = df.copy()
-
-    print("\n========== STARTING DATA CLEANING ==========")
-    print("Original dataset shape:", df_clean.shape)
-
-    logger.info("Original dataset shape: %s", df_clean.shape)
-
-    # 4. Handle missing categorical values using mode
-    print("\n--- Handling Missing Values ---")
-
-    for col in CATEGORICAL_COLUMNS:
-
-        missing_before = df_clean[col].isnull().sum()
-
-        if missing_before > 0:
-
-            mode_values = df_clean[col].mode()
-
-            if mode_values.empty:
-                error_message = (
-                    f"Cannot fill missing values in '{col}': "
-                    "No valid values available to calculate the mode."
-                )
-
-                logger.error(error_message)
-                raise ValueError(error_message)
-
-            mode_value = mode_values[0]
-
-            df_clean[col] = df_clean[col].fillna(mode_value)
-
-            print(
-                f"{col}: Filled {missing_before} missing values "
-                f"with '{mode_value}'."
-            )
-
-            logger.info(
-                "Filled %s missing values in %s using mode: %s.",
-                missing_before,
-                col,
-                mode_value
-            )
-
-        else:
-            logger.info("No missing values found in %s.", col)
-
-    # 5. Remove invalid exam scores
-    print("\n--- Removing Invalid Exam Scores ---")
-
-    invalid_scores = ~df_clean["Exam_Score"].between(0, 100)
-
-    invalid_count = invalid_scores.sum()
-
-    df_clean = df_clean.loc[~invalid_scores].copy()
-
-    print(f"Removed {invalid_count} rows with invalid exam scores.")
-
-    logger.info(
-        "Removed %s rows with invalid exam scores.",
-        invalid_count
+    required = (
+        list(config.NUMERIC_RANGES)
+        + list(config.CATEGORICAL_VALUES)
+        + [config.TARGET_COLUMN]
     )
 
-    # 6. Check the cleaning results
-    remaining_missing = df_clean.isnull().sum().sum()
+    missing_cols = [col for col in required if col not in df.columns]
 
-    remaining_invalid = (
-        ~df_clean["Exam_Score"].between(0, 100)
-    ).sum()
+    if missing_cols:
+        raise KeyError(f"Missing required columns: {missing_cols}")
 
-    print("\n========== CLEANING SUMMARY ==========")
-    print("Final dataset shape:", df_clean.shape)
-    print("Remaining missing values:", remaining_missing)
-    print("Remaining invalid exam scores:", remaining_invalid)
+    # 3. Check numeric column types
+    for col in list(config.NUMERIC_RANGES) + [config.TARGET_COLUMN]:
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            raise TypeError(f"Column '{col}' must be numeric")
 
-    print("\n========== DATA CLEANING COMPLETED ==========")
+    cleaned = df.copy()
+    rows_before = len(cleaned)
 
-    logger.info("Final dataset shape: %s", df_clean.shape)
-    logger.info("Remaining missing values: %s", remaining_missing)
-    logger.info("Remaining invalid exam scores: %s", remaining_invalid)
+    # 4. Remove rows with missing target values
+    missing_target = int(cleaned[config.TARGET_COLUMN].isna().sum())
 
-    if remaining_missing > 0:
-        logger.warning(
-            "Some missing values remain after cleaning: %s",
-            remaining_missing
+    if missing_target:
+        cleaned = cleaned.dropna(subset=[config.TARGET_COLUMN])
+
+        logger.info(
+            "Dropped %d rows with missing target",
+            missing_target,
         )
 
-    if remaining_invalid > 0:
-        logger.warning(
-            "Some invalid exam scores remain: %s",
-            remaining_invalid
+    if cleaned.empty:
+        raise ValueError("No rows left after removing missing target values")
+
+    # 5. Remove rows with exam scores outside the valid range
+    target = config.TARGET_COLUMN
+
+    valid_scores = cleaned[target].between(
+        config.SCORE_MIN,
+        config.SCORE_MAX,
+    )
+
+    removed_scores = int((~valid_scores).sum())
+
+    if removed_scores:
+        cleaned = cleaned[valid_scores]
+
+        logger.info(
+            "Removed %d rows with invalid %s",
+            removed_scores,
+            target,
         )
 
-    if remaining_missing == 0 and remaining_invalid == 0:
-        logger.info("Data cleaning completed successfully.")
-    else:
-        logger.warning("Data cleaning completed with remaining issues.")
+    if cleaned.empty:
+        raise ValueError("No rows left after removing invalid exam scores")
 
-    return df_clean
+    # 6. Remove rows with invalid numeric feature values.
+    # Missing values are allowed here because they will be filled later.
+    valid_rows = pd.Series(True, index=cleaned.index)
+
+    for col, (low, high) in config.NUMERIC_RANGES.items():
+
+        valid_values = (
+            cleaned[col].isna()
+            | cleaned[col].between(low, high)
+        )
+
+        invalid_count = int((~valid_values).sum())
+
+        if invalid_count:
+            valid_rows &= valid_values
+
+            logger.info(
+                "Marked %d rows with invalid values in '%s' for removal",
+                invalid_count,
+                col,
+            )
+
+    # 7. Remove rows with unexpected categorical values.
+    # Missing values are allowed here because they will be filled later.
+    for col, allowed in config.CATEGORICAL_VALUES.items():
+
+        valid_values = (
+            cleaned[col].isna()
+            | cleaned[col].isin(allowed)
+        )
+
+        invalid_count = int((~valid_values).sum())
+
+        if invalid_count:
+            valid_rows &= valid_values
+
+            logger.info(
+                "Marked %d rows with unexpected values in '%s' for removal",
+                invalid_count,
+                col,
+            )
+
+    removed_invalid = int((~valid_rows).sum())
+
+    if removed_invalid:
+        cleaned = cleaned[valid_rows]
+
+        logger.info(
+            "Removed %d rows with invalid feature values",
+            removed_invalid,
+        )
+
+    if cleaned.empty:
+        raise ValueError("No rows left after removing invalid feature values")
+
+    # 8. Fill missing numeric values with the median.
+    # Invalid values have already been removed, so they cannot affect
+    # the median calculation.
+    for col in config.NUMERIC_RANGES:
+
+        n_missing = int(cleaned[col].isna().sum())
+
+        if n_missing == 0:
+            continue
+
+        median = cleaned[col].median()
+
+        if pd.isna(median):
+            raise ValueError(
+                f"Cannot fill missing values in '{col}': "
+                "the column has no valid numeric values"
+            )
+
+        cleaned[col] = cleaned[col].fillna(median)
+
+        logger.info(
+            "Filled %d missing values in '%s' with the median",
+            n_missing,
+            col,
+        )
+
+    # 9. Fill missing categorical values with the mode.
+    # Unexpected categories have already been removed.
+    for col in config.CATEGORICAL_VALUES:
+
+        n_missing = int(cleaned[col].isna().sum())
+
+        if n_missing == 0:
+            continue
+
+        modes = cleaned[col].mode()
+
+        if modes.empty:
+            raise ValueError(
+                f"Cannot fill missing values in '{col}': "
+                "the column has no valid categorical values"
+            )
+
+        mode_value = modes.iloc[0]
+
+        cleaned[col] = cleaned[col].fillna(mode_value)
+
+        logger.info(
+            "Filled %d missing values in '%s' with the mode",
+            n_missing,
+            col,
+        )
+
+    # 10. Remove exact duplicate rows
+    duplicates = int(cleaned.duplicated().sum())
+
+    if duplicates:
+        cleaned = cleaned.drop_duplicates()
+
+        logger.info(
+            "Removed %d duplicate rows",
+            duplicates,
+        )
+
+    # 11. Reset the index
+    cleaned = cleaned.reset_index(drop=True)
+
+    logger.info(
+        "Cleaning finished: %d -> %d rows",
+        rows_before,
+        len(cleaned),
+    )
+
+    return cleaned
 
 
 if __name__ == "__main__":
 
-    try:
-        df = load_data()
-        cleaned_df = clean_data(df)
+    from Load import load_data
+    from Validate import validate_data
 
-    except FileNotFoundError as error:
-        print(f"File Error: {error}")
-        logger.exception("File error occurred during cleaning.")
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s | %(message)s",
+    )
 
-    except (TypeError, ValueError) as error:
-        print(f"Data Cleaning Error: {error}")
-        logger.exception("Data cleaning error occurred.")
+    raw = load_data()
+    cleaned = clean_data(raw)
 
-    except Exception as error:
-        print(f"Unexpected Error: {error}")
-        logger.exception("Unexpected error occurred during cleaning.")
+    print("Before:", raw.shape, "| After:", cleaned.shape)
+    print("Missing values left:", int(cleaned.isna().sum().sum()))
+    print("Max Exam_Score:", cleaned[config.TARGET_COLUMN].max())
+
+    result = validate_data(cleaned)
+
+    print("Validation after cleaning:", result["is_valid"])
+    print("Remaining errors:", result["errors"])
+    print("Remaining warnings:", result["warnings"])

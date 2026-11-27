@@ -1,151 +1,263 @@
 
-"""
-Visualize Module
+"""Step 5 - Visualize: create and save the project charts."""
 
-Generates and saves visualizations for the cleaned
-student performance dataset.
-"""
-
-import pandas as pd
-import matplotlib.pyplot as plt
 import logging
 
-from config import VISUALIZATIONS_DIR
+import matplotlib
+matplotlib.use("Agg")
 
+import matplotlib.pyplot as plt
+import pandas as pd
+import seaborn as sns
+
+import config
 
 logger = logging.getLogger(__name__)
 
 
-def visualize_data(df):
-    """
-    Generate and save visualizations for student performance data.
+def _check(df, columns):
+    """Validate the DataFrame and the columns required for a plot."""
 
-    The function creates:
-    1. Exam score distribution histogram.
-    2. Study hours versus exam score scatter plot.
-    3. Attendance versus exam score scatter plot.
-    4. Average exam score by motivation level bar chart.
-
-    Args:
-        df (pd.DataFrame): Cleaned student performance dataset.
-
-    Returns:
-        pd.DataFrame: Original DataFrame without modifications.
-
-    Raises:
-        TypeError: If the input is not a pandas DataFrame.
-        ValueError: If the dataset is empty or required columns are missing.
-    """
-
-    logger.info("Starting data visualization.")
-
-    # Check input data
     if not isinstance(df, pd.DataFrame):
-        logger.error("Invalid input: Expected a pandas DataFrame.")
-        raise TypeError("Visualize requires a pandas DataFrame.")
+        raise TypeError("Expected a pandas DataFrame")
 
     if df.empty:
-        logger.error("Cannot visualize an empty dataset.")
-        raise ValueError("Cannot visualize an empty dataset.")
+        raise ValueError("Cannot plot an empty DataFrame")
 
-    # Check required columns
-    required_columns = [
-        "Exam_Score",
-        "Hours_Studied",
-        "Attendance",
-        "Motivation_Level"
-    ]
+    missing = [col for col in columns if col not in df.columns]
 
-    missing_columns = [
-        col for col in required_columns if col not in df.columns
-    ]
+    if missing:
+        raise KeyError(f"Missing columns for plot: {missing}")
 
-    if missing_columns:
-        error_message = (
-            f"Missing required columns for visualization: {missing_columns}"
-        )
-        logger.error(error_message)
-        raise ValueError(error_message)
+    for col in columns:
+        if not pd.api.types.is_numeric_dtype(df[col]):
+            raise TypeError(f"Column '{col}' must be numeric")
 
-    logger.info("Input data validation completed successfully.")
-    logger.info("Dataset shape: %s", df.shape)
 
-    # Create folder for visualizations
-    VISUALIZATIONS_DIR.mkdir(parents=True, exist_ok=True)
+def plot_score_distribution(df):
+    """Create a histogram showing the distribution of exam scores."""
 
-    logger.info(
-        "Visualization directory is ready: %s",
-        VISUALIZATIONS_DIR
+    target = config.TARGET_COLUMN
+    _check(df, [target])
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    sns.histplot(
+        data=df,
+        x=target,
+        bins=25,
+        kde=True,
+        color="#457b9d",
+        ax=ax,
     )
 
-    # 1. Histogram: Exam Score Distribution
-    plt.figure(figsize=(8, 5))
-    plt.hist(df["Exam_Score"], bins=10, edgecolor="black")
-    plt.title("Distribution of Exam Scores")
-    plt.xlabel("Exam Score")
-    plt.ylabel("Number of Students")
-    plt.tight_layout()
-    plt.savefig(VISUALIZATIONS_DIR / "exam_score_histogram.png")
-    plt.show()
-    plt.close()
+    ax.set_title("Exam Score Distribution", fontsize=14)
+    ax.set_xlabel("Exam Score")
+    ax.set_ylabel("Number of Students")
 
-    logger.info("Saved exam score histogram.")
+    fig.tight_layout()
 
-    # 2. Scatter Plot: Hours Studied vs Exam Score
-    plt.figure(figsize=(8, 5))
-    plt.scatter(df["Hours_Studied"], df["Exam_Score"])
-    plt.title("Hours Studied vs Exam Score")
-    plt.xlabel("Hours Studied")
-    plt.ylabel("Exam Score")
-    plt.tight_layout()
-    plt.savefig(VISUALIZATIONS_DIR / "study_hours_scatter.png")
-    plt.show()
-    plt.close()
+    return fig
 
-    logger.info("Saved study hours scatter plot.")
 
-    # 3. Scatter Plot: Attendance vs Exam Score
-    plt.figure(figsize=(8, 5))
-    plt.scatter(df["Attendance"], df["Exam_Score"])
-    plt.title("Attendance vs Exam Score")
-    plt.xlabel("Attendance")
-    plt.ylabel("Exam Score")
-    plt.tight_layout()
-    plt.savefig(VISUALIZATIONS_DIR / "attendance_scatter.png")
-    plt.show()
-    plt.close()
+def plot_scatter(df, feature):
+    """Create a scatter plot showing a feature's relationship with exam scores."""
 
-    logger.info("Saved attendance scatter plot.")
+    target = config.TARGET_COLUMN
+    _check(df, [feature, target])
 
-    # 4. Bar Chart: Average Exam Score by Motivation
-    average_scores = df.groupby("Motivation_Level")["Exam_Score"].mean()
+    fig, ax = plt.subplots(figsize=(8, 5))
 
-    plt.figure(figsize=(8, 5))
-    average_scores.plot(kind="bar", edgecolor="black")
-    plt.title("Average Exam Score by Motivation Level")
-    plt.xlabel("Motivation Level")
-    plt.ylabel("Average Exam Score")
-    plt.tight_layout()
-    plt.savefig(VISUALIZATIONS_DIR / "motivation_bar_chart.png")
-    plt.show()
-    plt.close()
+    sns.regplot(
+        data=df,
+        x=feature,
+        y=target,
+        scatter_kws={"alpha": 0.25, "s": 12},
+        line_kws={"color": "red"},
+        ax=ax,
+    )
 
-    logger.info("Saved motivation bar chart.")
+    ax.set_title(
+        f"{feature.replace('_', ' ')} vs Exam Score",
+        fontsize=14,
+    )
+    ax.set_xlabel(feature.replace("_", " "))
+    ax.set_ylabel("Exam Score")
 
-    logger.info("All visualizations generated successfully.")
+    fig.tight_layout()
 
-    return df
+    return fig
+
+
+def plot_mean_by_category(df, category):
+    """Create a bar chart showing average exam scores by category."""
+
+    target = config.TARGET_COLUMN
+
+    if not isinstance(df, pd.DataFrame):
+        raise TypeError("Expected a pandas DataFrame")
+
+    if df.empty:
+        raise ValueError("Cannot plot an empty DataFrame")
+
+    missing = [col for col in [category, target] if col not in df.columns]
+
+    if missing:
+        raise KeyError(f"Missing columns for plot: {missing}")
+
+    if not pd.api.types.is_numeric_dtype(df[target]):
+        raise TypeError(f"Column '{target}' must be numeric")
+
+    if not (
+        pd.api.types.is_object_dtype(df[category])
+        or pd.api.types.is_string_dtype(df[category].dtype)
+        or isinstance(df[category].dtype, pd.CategoricalDtype)
+    ):
+        raise TypeError(f"Column '{category}' must be categorical")
+
+    means = df.groupby(category)[target].mean().sort_values()
+
+    if means.empty:
+        raise ValueError(f"No valid groups found for column '{category}'")
+
+    fig, ax = plt.subplots(figsize=(8, 5))
+
+    bars = ax.bar(
+        means.index.astype(str),
+        means.values,
+        color="#2a9d8f",
+    )
+
+    ax.set_ylim(0, max(100, means.max() + 5))
+
+    for bar, value in zip(bars, means.values):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            value + 0.5,
+            f"{value:.1f}",
+            ha="center",
+            fontsize=10,
+        )
+
+    ax.set_title(
+        f"Average Exam Score by {category.replace('_', ' ')}",
+        fontsize=14,
+    )
+    ax.set_xlabel(category.replace("_", " "))
+    ax.set_ylabel("Average Exam Score")
+
+    fig.tight_layout()
+
+    return fig
+
+
+def plot_correlation_heatmap(df):
+    """Create a heatmap showing correlations between numeric features."""
+
+    numeric = list(config.NUMERIC_RANGES) + [config.TARGET_COLUMN]
+
+    _check(df, numeric)
+
+    fig, ax = plt.subplots(figsize=(10, 7))
+
+    sns.heatmap(
+        df[numeric].corr(),
+        annot=True,
+        fmt=".2f",
+        cmap="coolwarm",
+        center=0,
+        vmin=-1,
+        vmax=1,
+        linewidths=0.5,
+        ax=ax,
+    )
+
+    ax.set_title("Correlation Between Numeric Features", fontsize=14)
+
+    fig.tight_layout()
+
+    return fig
+
+
+def save_figure(fig, filename):
+    """Save a figure in the visualizations directory and close it."""
+
+    try:
+        if fig is None:
+            raise ValueError("Cannot save an empty figure")
+
+        if not isinstance(filename, str) or not filename.strip():
+            raise ValueError("filename must be a non-empty string")
+
+        path = config.VISUALIZATIONS_DIR / filename
+
+        config.VISUALIZATIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+        fig.savefig(path, dpi=150, bbox_inches="tight")
+        logger.info("Saved visualization: %s", path.name)
+
+    except OSError:
+        logger.exception("Failed to save visualization")
+        raise
+
+    finally:
+        if fig is not None:
+            plt.close(fig)
+
+    return path
+
+
+def generate_all_visualizations(df):
+    """Generate and save all project visualizations."""
+
+    plots = [
+        (plot_score_distribution, "score_distribution.png", ()),
+        (plot_scatter, "hours_vs_score.png", ("Hours_Studied",)),
+        (plot_scatter, "attendance_vs_score.png", ("Attendance",)),
+        (plot_mean_by_category, "motivation_vs_score.png", ("Motivation_Level",)),
+        (plot_correlation_heatmap, "correlation_heatmap.png", ()),
+    ]
+
+    paths = []
+
+    for plot_function, filename, args in plots:
+        fig = None
+
+        try:
+            if args:
+                fig = plot_function(df, *args)
+            else:
+                fig = plot_function(df)
+
+            paths.append(save_figure(fig, filename))
+
+        except Exception:
+            if fig is not None:
+                plt.close(fig)
+
+            logger.exception("Failed to generate %s", filename)
+            raise
+
+    logger.info("Generated %d visualizations successfully", len(paths))
+
+    return paths
 
 
 if __name__ == "__main__":
-    from Load import load_data
     from Clean import clean_data
+    from Load import load_data
 
-    try:
-        df = load_data()
-        df_clean = clean_data(df)
-        visualize_data(df_clean)
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(levelname)s | %(message)s",
+    )
 
-    except Exception:
-        logger.exception("An error occurred during visualization.")
-        raise
+    data = clean_data(load_data())
+
+    paths = generate_all_visualizations(data)
+
+    print(f"\nCreated {len(paths)} charts in:")
+    print(config.VISUALIZATIONS_DIR)
+
+    for path in paths:
+        print("-", path.name)

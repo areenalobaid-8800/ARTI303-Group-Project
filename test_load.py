@@ -1,97 +1,111 @@
 
+"""Tests for Step 1 - Load."""
+
+import logging
+
 import pandas as pd
-from pathlib import Path
-from tempfile import TemporaryDirectory
-from unittest.mock import patch
+import pytest
 
-import Load
+from Load import load_data
 
 
-def test_load_data_success():
-    # Create a temporary folder and CSV file
-    with TemporaryDirectory() as temp_dir:
+def test_load_valid_csv(tmp_path):
+    """Test loading a valid CSV file."""
 
-        raw_dir = Path(temp_dir)
+    file_path = tmp_path / "valid.csv"
 
-        sample_df = pd.DataFrame({
-            "Hours_Studied": [10, 20, 30],
-            "Attendance": [70, 80, 90],
-            "Exam_Score": [60, 70, 80]
-        })
+    file_path.write_text(
+        "Name,Age,Score\n"
+        "Ali,20,90\n"
+        "Sara,21,85\n",
+        encoding="utf-8",
+    )
 
-        csv_path = raw_dir / "sample.csv"
-        sample_df.to_csv(csv_path, index=False)
+    df = load_data(file_path)
 
-        # Replace the raw data directory with the temporary folder
-        with patch("Load.RAW_DATA_DIR", raw_dir):
-            loaded_df = Load.load_data()
-
-        # Check that the loaded data is a DataFrame
-        assert isinstance(loaded_df, pd.DataFrame)
-
-        # Check that the loaded data matches the original data
-        pd.testing.assert_frame_equal(loaded_df, sample_df)
-
-        print("Load data success test passed!")
+    assert isinstance(df, pd.DataFrame)
+    assert df.shape == (2, 3)
+    assert list(df.columns) == ["Name", "Age", "Score"]
+    assert df.iloc[0]["Name"] == "Ali"
+    assert df.iloc[1]["Score"] == 85
 
 
-def test_load_data_no_csv():
-    # Create an empty temporary folder
-    with TemporaryDirectory() as temp_dir:
+def test_load_missing_file(tmp_path):
+    """Test that a missing file raises FileNotFoundError."""
 
-        raw_dir = Path(temp_dir)
+    file_path = tmp_path / "missing.csv"
 
-        # Replace the raw data directory with the empty folder
-        with patch("Load.RAW_DATA_DIR", raw_dir):
-
-            try:
-                Load.load_data()
-
-            except FileNotFoundError as error:
-                assert str(error) == (
-                    "No CSV file found in data/raw folder."
-                )
-
-            else:
-                raise AssertionError(
-                    "Expected FileNotFoundError when no CSV file exists."
-                )
-
-        print("Load missing file test passed!")
+    with pytest.raises(FileNotFoundError):
+        load_data(file_path)
 
 
-def test_load_data_read_error():
-    # Create a temporary folder with a CSV file
-    with TemporaryDirectory() as temp_dir:
+def test_load_empty_file(tmp_path):
+    """Test that an empty CSV file raises ValueError."""
 
-        raw_dir = Path(temp_dir)
-        csv_path = raw_dir / "sample.csv"
-        csv_path.write_text("sample data")
+    file_path = tmp_path / "empty.csv"
+    file_path.write_text("", encoding="utf-8")
 
-        # Simulate an error while reading the CSV file
-        with patch("Load.RAW_DATA_DIR", raw_dir):
-            with patch(
-                "Load.pd.read_csv",
-                side_effect=ValueError("Invalid CSV data")
-            ):
-
-                try:
-                    Load.load_data()
-
-                except ValueError as error:
-                    assert str(error) == "Invalid CSV data"
-
-                else:
-                    raise AssertionError(
-                        "Expected ValueError when CSV reading fails."
-                    )
-
-        print("Load read error test passed!")
+    with pytest.raises(ValueError, match="Dataset file is empty"):
+        load_data(file_path)
 
 
-if __name__ == "__main__":
-    test_load_data_success()
-    test_load_data_no_csv()
-    test_load_data_read_error()
+def test_load_csv_without_rows(tmp_path):
+    """Test that a CSV containing only column names raises ValueError."""
 
-    print("\nAll Load tests passed successfully!")
+    file_path = tmp_path / "no_rows.csv"
+    file_path.write_text(
+        "Name,Age,Score\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="Dataset has no rows"):
+        load_data(file_path)
+
+
+def test_load_malformed_csv(tmp_path):
+    """Test that a malformed CSV file raises ValueError."""
+
+    file_path = tmp_path / "malformed.csv"
+
+    file_path.write_text(
+        "Name,Age\n"
+        "Ali,20\n"
+        "Sara,21,90\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="File is not a valid CSV"):
+        load_data(file_path)
+
+
+def test_load_unsupported_encoding(tmp_path):
+    """Test that an unsupported file encoding raises ValueError."""
+
+    file_path = tmp_path / "invalid_encoding.csv"
+
+    file_path.write_bytes(
+        b"Name,Age\n"
+        b"Ali,\xff\xfe\n"
+    )
+
+    with pytest.raises(ValueError, match="Unsupported file encoding"):
+        load_data(file_path)
+
+
+def test_load_logs_success(tmp_path, caplog):
+    """Test that successful loading generates an INFO log."""
+
+    file_path = tmp_path / "logged.csv"
+
+    file_path.write_text(
+        "Name,Age\n"
+        "Ali,20\n"
+        "Sara,21\n",
+        encoding="utf-8",
+    )
+
+    with caplog.at_level(logging.INFO, logger="Load"):
+        df = load_data(file_path)
+
+    assert "Loaded 2 rows and 2 columns" in caplog.text
+    assert len(df) == 2

@@ -1,173 +1,208 @@
 
+"""Tests for Step 2 - Validate."""
+
+import logging
+
+import numpy as np
 import pandas as pd
-import Validate
+import pytest
+
+import config
+from Validate import validate_data
 
 
-# Create a valid sample dataset
-def create_valid_data():
+@pytest.fixture
+def valid_data():
+    """Create a valid DataFrame using the project configuration."""
 
-    data = {
-        "Hours_Studied": [10, 20, 30, 40],
-        "Attendance": [60, 70, 80, 90],
-        "Parental_Involvement": ["Low", "Medium", "High", "Low"],
-        "Access_to_Resources": ["Low", "Medium", "High", "Low"],
-        "Extracurricular_Activities": ["Yes", "No", "Yes", "No"],
-        "Sleep_Hours": [6, 7, 8, 9],
-        "Previous_Scores": [60, 65, 70, 75],
-        "Motivation_Level": ["Low", "Medium", "High", "Low"],
-        "Internet_Access": ["Yes", "No", "Yes", "No"],
-        "Tutoring_Sessions": [0, 1, 2, 3],
-        "Family_Income": ["Low", "Medium", "High", "Low"],
-        "Teacher_Quality": ["Low", "Medium", "High", "Low"],
-        "School_Type": ["Public", "Private", "Public", "Private"],
-        "Peer_Influence": ["Positive", "Negative", "Neutral", "Positive"],
-        "Physical_Activity": [1, 2, 3, 4],
-        "Learning_Disabilities": ["Yes", "No", "Yes", "No"],
-        "Parental_Education_Level": [
-            "High School", "College", "Postgraduate", "High School"
-        ],
-        "Distance_from_Home": ["Near", "Moderate", "Far", "Near"],
-        "Gender": ["Male", "Female", "Male", "Female"],
-        "Exam_Score": [60, 65, 70, 75]
-    }
+    data = {}
+    n_rows = 4
+
+    for col, (low, high) in config.NUMERIC_RANGES.items():
+        data[col] = np.linspace(
+            low + (high - low) * 0.2,
+            low + (high - low) * 0.8,
+            n_rows,
+        )
+
+    for col, allowed in config.CATEGORICAL_VALUES.items():
+        data[col] = [
+            allowed[i % len(allowed)]
+            for i in range(n_rows)
+        ]
+
+    data[config.TARGET_COLUMN] = [65, 75, 85, 90]
 
     return pd.DataFrame(data)
 
 
-# 1. Test structure validation
-def test_check_structure():
+# --------------------------------
+# Tests for validate_data()
+# --------------------------------
 
-    df = create_valid_data()
+def test_validate_valid_dataframe(valid_data):
+    """Test that a valid DataFrame passes validation."""
 
-    assert Validate.check_structure(df) == True
+    report = validate_data(valid_data)
 
-    invalid_df = df.drop(columns=["Exam_Score"])
-    assert Validate.check_structure(invalid_df) == False
-
-    empty_df = pd.DataFrame()
-    assert Validate.check_structure(empty_df) == False
-
-    print("Structure tests passed!")
-
-
-# 2. Test data types validation
-def test_check_data_types():
-
-    df = create_valid_data()
-
-    assert Validate.check_data_types(df) == True
-
-    invalid_df = df.copy()
-    invalid_df["Hours_Studied"] = invalid_df["Hours_Studied"].astype(str)
-
-    assert Validate.check_data_types(invalid_df) == False
-
-    print("Data types tests passed!")
+    assert report["is_valid"] is True
+    assert report["errors"] == []
+    assert report["warnings"] == []
+    assert report["missing_values"] == {}
+    assert report["duplicate_rows"] == 0
 
 
-# 3. Test missing values validation
-def test_check_missing_values():
+def test_validate_non_dataframe():
+    """Test that non-DataFrame input raises TypeError."""
 
-    df = create_valid_data()
-
-    assert Validate.check_missing_values(df) == True
-
-    missing_df = df.copy()
-    missing_df.loc[0, "Teacher_Quality"] = None
-
-    assert Validate.check_missing_values(missing_df) == False
-
-    hidden_missing_df = df.copy()
-    hidden_missing_df.loc[0, "Teacher_Quality"] = "N/A"
-
-    assert Validate.check_missing_values(hidden_missing_df) == False
-
-    print("Missing values tests passed!")
+    with pytest.raises(
+        TypeError,
+        match="validate_data expects a pandas DataFrame",
+    ):
+        validate_data([1, 2, 3])
 
 
-# 4. Test duplicate validation
-def test_check_duplicates():
+def test_validate_empty_dataframe():
+    """Test that an empty DataFrame raises ValueError."""
 
-    df = create_valid_data()
+    with pytest.raises(
+        ValueError,
+        match="Cannot validate an empty DataFrame",
+    ):
+        validate_data(pd.DataFrame())
 
-    assert Validate.check_duplicates(df) == True
 
-    duplicate_df = pd.concat(
-        [df, df.iloc[[0]]],
-        ignore_index=True
+def test_validate_missing_column(valid_data):
+    """Test that missing required columns are reported as errors."""
+
+    col = list(config.NUMERIC_RANGES)[0]
+    invalid_data = valid_data.drop(columns=[col])
+
+    report = validate_data(invalid_data)
+
+    assert report["is_valid"] is False
+    assert any(
+        "Missing required columns" in error
+        for error in report["errors"]
     )
 
-    assert Validate.check_duplicates(duplicate_df) == False
 
-    print("Duplicate tests passed!")
+def test_validate_wrong_numeric_type(valid_data):
+    """Test that a numeric column with the wrong type is an error."""
 
+    col = list(config.NUMERIC_RANGES)[0]
+    valid_data[col] = ["invalid"] * len(valid_data)
 
-# 5. Test numerical values validation
-def test_check_numerical_values():
+    report = validate_data(valid_data)
 
-    df = create_valid_data()
-
-    assert Validate.check_numerical_values(df) == True
-
-    # Test values outside the allowed range
-    invalid_range_df = df.copy()
-    invalid_range_df.loc[0, "Attendance"] = 150
-
-    assert Validate.check_numerical_values(invalid_range_df) == False
-
-    # Test non-integer tutoring sessions
-    invalid_integer_df = df.copy()
-    invalid_integer_df["Tutoring_Sessions"] = (
-        invalid_integer_df["Tutoring_Sessions"].astype(float)
+    assert report["is_valid"] is False
+    assert any(
+        f"Column '{col}' must be numeric" in error
+        for error in report["errors"]
     )
-    invalid_integer_df.loc[0, "Tutoring_Sessions"] = 1.5
-
-    assert Validate.check_numerical_values(invalid_integer_df) == False
-
-    print("Numerical values tests passed!")
 
 
-# 6. Test categorical values validation
-def test_check_categorical_values():
+def test_validate_missing_values_warning(valid_data):
+    """Test that missing values generate a warning."""
 
-    df = create_valid_data()
+    col = list(config.NUMERIC_RANGES)[0]
+    valid_data.loc[0, col] = np.nan
 
-    assert Validate.check_categorical_values(df) == True
+    report = validate_data(valid_data)
 
-    invalid_df = df.copy()
-    invalid_df.loc[0, "Gender"] = "Unknown"
-
-    assert Validate.check_categorical_values(invalid_df) == False
-
-    print("Categorical values tests passed!")
-
-
-# 7. Test complete validation
-def test_validate_data():
-
-    df = create_valid_data()
-
-    assert Validate.validate_data(df) == True
-
-    invalid_df = df.copy()
-    invalid_df.loc[0, "Gender"] = "Unknown"
-
-    assert Validate.validate_data(invalid_df) == False
-
-    assert Validate.validate_data(None) == False
-
-    print("Complete validation tests passed!")
+    assert report["is_valid"] is True
+    assert report["errors"] == []
+    assert col in report["missing_values"]
+    assert report["missing_values"][col] == 1
+    assert any(
+        "Missing values" in warning
+        for warning in report["warnings"]
+    )
 
 
-# Run all tests
-if __name__ == "__main__":
+def test_validate_duplicate_rows_warning(valid_data):
+    """Test that duplicate rows generate a warning."""
 
-    test_check_structure()
-    test_check_data_types()
-    test_check_missing_values()
-    test_check_duplicates()
-    test_check_numerical_values()
-    test_check_categorical_values()
-    test_validate_data()
+    valid_data.loc[1] = valid_data.loc[0]
 
-    print("\nAll Validate tests passed successfully!")
+    report = validate_data(valid_data)
+
+    assert report["is_valid"] is True
+    assert report["duplicate_rows"] == 1
+    assert any(
+        "duplicate rows" in warning
+        for warning in report["warnings"]
+    )
+
+
+def test_validate_numeric_range_warning(valid_data):
+    """Test that numeric values outside the allowed range generate a warning."""
+
+    col = list(config.NUMERIC_RANGES)[0]
+    _, high = config.NUMERIC_RANGES[col]
+
+    valid_data.loc[0, col] = high + 1
+
+    report = validate_data(valid_data)
+
+    assert report["is_valid"] is True
+    assert report["errors"] == []
+    assert any(
+        f"Column '{col}'" in warning
+        and "values outside" in warning
+        for warning in report["warnings"]
+    )
+
+
+def test_validate_target_range_warning(valid_data):
+    """Test that Exam_Score outside its valid range generates a warning."""
+
+    valid_data.loc[0, config.TARGET_COLUMN] = (
+        config.SCORE_MAX + 1
+    )
+
+    report = validate_data(valid_data)
+
+    assert report["is_valid"] is True
+    assert report["errors"] == []
+    assert any(
+        f"{config.TARGET_COLUMN} outside" in warning
+        for warning in report["warnings"]
+    )
+
+
+def test_validate_unexpected_category_warning(valid_data):
+    """Test that unexpected categorical values generate a warning."""
+
+    col = list(config.CATEGORICAL_VALUES)[0]
+    valid_data.loc[0, col] = "Unknown"
+
+    report = validate_data(valid_data)
+
+    assert report["is_valid"] is True
+    assert report["errors"] == []
+    assert any(
+        f"Column '{col}'" in warning
+        and "unexpected values" in warning
+        for warning in report["warnings"]
+    )
+
+
+def test_validate_does_not_modify_original(valid_data):
+    """Test that validation does not modify the original DataFrame."""
+
+    original = valid_data.copy(deep=True)
+
+    validate_data(valid_data)
+
+    pd.testing.assert_frame_equal(valid_data, original)
+
+
+def test_validate_logs_success(valid_data, caplog):
+    """Test that successful validation generates an INFO log."""
+
+    with caplog.at_level(logging.INFO, logger="Validate"):
+        report = validate_data(valid_data)
+
+    assert report["is_valid"] is True
+    assert "Validation finished" in caplog.text
